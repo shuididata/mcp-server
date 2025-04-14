@@ -1,0 +1,9 @@
+[project]
+name = "shuididatamcp"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "loguru>=0.7.3",
+    "mcp>=1.6.0",
+]
