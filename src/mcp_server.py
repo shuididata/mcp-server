@@ -436,9 +436,5 @@ def main():
     mcp.run(transport='stdio')
 
 
-def test():
-    info = asyncio.run(get_company_info('上海凭安网络科技有限公司'))
-    print(info)
-
 if __name__ == '__main__':
     main()
