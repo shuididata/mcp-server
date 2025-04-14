@@ -87,14 +87,14 @@ cursor
 ### STDIO版安装部署
 
 - 使用 uv
-  - 使用 [`uv`](https://docs.astral.sh/uv/) 时无需特定安装. 我们将直接运行 [`uvx`](https://docs.astral.sh/uv/guides/tools/)  src/mcp_server.py.
+  - 使用 [`uv`](https://docs.astral.sh/uv/) 时无需特定安装. 我们将直接运行 uv src/mcp_server.py.
 
 - 在cusor setting中打开MCP窗口
 - 单击 "Add new global MCP Server"按钮，编辑mcp.json
 - 在cursor中配置
 ```json
  "DataMcpServer": {
-    "command": "uvx",
+    "command": "uv",
       "args": [
         "--directory",
         "{workdir}",
