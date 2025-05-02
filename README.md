@@ -99,11 +99,11 @@ cursor
 ## 安装部署
 [请在此处提供详细的安装和部署说明，根据您的产品特性选择合适的描述方式。]
 ### SSE版安装部署
-- 在cusor setting中打开MCP窗口
+- 在cursor setting中打开MCP窗口
 - 单击 "Add new global MCP Server"按钮，编辑mcp.json
 - 在cursor中配置
 ```json
- "DataMcpServer": {
+ "DataMcpServer":{
    "url": "http://mcp.shuidi.cn/sse"  
  },
 ```
@@ -112,11 +112,11 @@ cursor
 - 使用 uv
   - 使用 [`uv`](https://docs.astral.sh/uv/) 时无需特定安装. 我们将直接运行 uv src/mcp_server.py.
 
-- 在cusor setting中打开MCP窗口
+- 在cursor setting中打开MCP窗口
 - 单击 "Add new global MCP Server"按钮，编辑mcp.json
 - 在cursor中配置
 ```json
- "DataMcpServer": {
+ "DataMcpServer":{
     "command": "uv",
       "args": [
         "--directory",
@@ -125,7 +125,7 @@ cursor
         "src/mcp_server.py"
       ],
       "env": {
-        "shuidi_pname": "--在shuidi官网申请的pkey--",
+        "shuidi_pname": "--在shuidi官网申请的pname--",
         "shuidi_pkey": "--在shuidi官网申请的pkey--"
       }
  },
