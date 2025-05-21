@@ -1,0 +1,24 @@
+# Smithery configuration file: https://smithery.ai/docs/build/project-config
+
+startCommand:
+  type: stdio
+  commandFunction:
+    # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
+    |-
+    (config) => ({ command: 'uv', args: ['run', 'src/mcp_server.py'], env: { shuidi_pname: config.shuidiPname, shuidi_pkey: config.shuidiPkey } })
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    required:
+      - shuidiPname
+      - shuidiPkey
+    properties:
+      shuidiPname:
+        type: string
+        description: The shuidi pname supplied by Shuidi API
+      shuidiPkey:
+        type: string
+        description: The shuidi pkey supplied by Shuidi API
+  exampleConfig:
+    shuidiPname: "2025041486173046"
+    shuidiPkey: 3303b6a7e64ac0b18b5f17aafde52c71
