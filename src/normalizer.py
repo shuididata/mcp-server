@@ -1,10 +1,12 @@
+import asyncio
 import re
 from datetime import datetime
 from typing import Optional, ClassVar, Literal
 
-
 from pydantic.v1 import BaseModel
 from pydantic.v1 import validator
+
+from api_tool import create_api_adapter
 
 
 class Area(BaseModel):
@@ -185,6 +187,23 @@ class DateRange(BaseModel):
 
         return start_date, end_date
 
+
+async def normalize_company_name(company_name: str) -> str:
+    """
+    根据企业名称模糊搜索，返回匹配的第一条记录的企业名称
+    :param company_name:
+    :return 最匹配的企业名称
+    """
+    url = 'https://api.shuidi.cn/utn/ic/Search/V1'
+    response = await create_api_adapter(url).invoke({'key_word': company_name})
+    if response.get('statusCode') == 1:
+        company_list = response.get('data').get('items')
+        if company_list:
+            for company in company_list:
+                n_company_name = company['company_name']
+                return n_company_name
+    return None
+
 def main():
     try:
         area = Area(province='江苏', city=None, district=None)
@@ -195,6 +214,10 @@ def main():
 
         establish_date = DateRange(date_range='2023-01-02@2023-01-02')
         print(establish_date.date_range)
+
+        company_name = '上海凭安信用'
+        company = asyncio.run(normalize_company_name(company_name))
+        print(company)
     except Exception as e:
         print(e)
 

@@ -1,13 +1,48 @@
+import asyncio
+import inspect
+import sys
+from functools import wraps
 from loguru import logger
 from mcp.server import FastMCP
 
-from api_tool import ApiAdapter, SearchApiAdapter
-from normalizer import Area, DateRange, CompanyStatus
+from api_tool import create_api_adapter, create_search_api_adapter
+from normalizer import Area, CompanyStatus, DateRange, normalize_company_name
 
-mcp = FastMCP(title='Shuidi DataMcpServer', version='1.0')
+mcp = FastMCP(name='Shuidi DataMcpServer')
+
+def create_bad_resonse(message) -> dict:
+    return {'statusCode':99999, 'statusMessage': message}
+
+def normalize_company(param_name: str):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            response =  await func(*args, **kwargs)
+            if response.get('statusCode') == 2:
+                sig = inspect.signature(func)
+                params = list(sig.parameters.keys())
+                if param_name in params:
+                    param_index = params.index(param_name)
+                    if kwargs.get(param_name):
+                        company_name = kwargs.get(param_name)
+                    else:
+                        args = list(args)
+                        company_name = args[param_index]
+                    n_company_name = await normalize_company_name(company_name)
+                    if n_company_name and company_name != n_company_name:
+                        if kwargs.get(param_name):
+                            kwargs[param_name] = n_company_name
+                        else:
+                            args[param_index] = n_company_name
+                            args = tuple(args)
+                        return await func(*args, **kwargs)
+            return response
+        return wrapper
+    return decorator
+
 
 @mcp.tool()
-async def search_established_companies(province=None, city=None, district=None, establish_date=None):
+async def search_established_companies(province=None, city=None, district=None, establish_date=None) -> dict:
     """
     输入省份、城市、成立日期查询并统计某时间段成立的企业
     回答问题时结果中请先说明查询到的企业数，并以列表的形式列出查询到的前10条企业
@@ -22,7 +57,7 @@ async def search_established_companies(province=None, city=None, district=None, 
                                           为None时表示任意时间成立的企业。
 
     :return
-    status	String	状态码0代表成功
+    statusCode	int	1代表成功,其他表示失败
     data.num_found	String	返回的公司记录数
 
     companyName String 公司名称
@@ -37,14 +72,15 @@ async def search_established_companies(province=None, city=None, district=None, 
         area = Area(province=province, city=city, district=district)
         establish_date = DateRange(date_range=establish_date).date_range
         params = {'province': area.province, 'city': area.city, 'district': area.district, 'establishDate':establish_date, 'company_type':'有限责任公司,股份有限公司,股份合作公司,国有企业,央企,集体所有制,全民所有制,独资企业,有限合伙,普通合伙,外商投资企业,港、澳、台商投资企业,联营企业,私营企业'}
-        return await SearchApiAdapter().invoke(params)
+        adapter = create_search_api_adapter()
+        return await adapter.invoke(params)
     except Exception as e:
         logger.error(e)
-        return f"查询统计企业失败！{e}"
+        return create_bad_resonse(f"查询统计企业失败！{e}")
 
 
 @mcp.tool()
-async def search_established_selfemployed(province=None, city=None, district=None, establish_date=None):
+async def search_established_selfemployed(province=None, city=None, district=None, establish_date=None) -> dict:
     """
     输入省份、城市、成立日期查询并统计某时间段成立的个体工商户
     回答问题时结果中请先说明查询到的记录数，并以列表的形式列出查询到的前10条个体工商户
@@ -59,7 +95,7 @@ async def search_established_selfemployed(province=None, city=None, district=Non
                                           为None时表示任意时间成立的企业。
 
     :return
-    status	String	状态码0代表成功
+    statusCode	int	状态码1代表成功,其他代表失败
     data.num_found	String	返回的记录数
 
     companyName String 公司名称
@@ -74,13 +110,14 @@ async def search_established_selfemployed(province=None, city=None, district=Non
         area = Area(province=province, city=city, district=district)
         establish_date = DateRange(date_range=establish_date).date_range
         params = {'province': area.province, 'city': area.city, 'district': area.district, 'establishDate':establish_date, 'company_type':'个体工商户'}
-        return await SearchApiAdapter().invoke(params)
+        adapter = create_search_api_adapter()
+        return await adapter.invoke(params)
     except Exception as e:
         logger.error(e)
-        return f"查询统计个体户失败！{e}"
+        return create_bad_resonse("查询统计个体户失败！{e}")
 
 @mcp.tool()
-async def search_companies(province=None, city=None, district=None, company_status=None):
+async def search_companies(province=None, city=None, district=None, company_status=None) -> dict:
     """
     输入省份、城市、企业状态查询并统计企业
     回答问题时结果中请先说明查询到的记录数，并以列表的形式列出查询到的前10条企业
@@ -91,7 +128,7 @@ async def search_companies(province=None, city=None, district=None, company_stat
                                  企业状态正常，包括了在营、存续、在业、迁入、迁出的企业
                                  企业状态异常，包括了吊销、注销企业
     :return
-    status	String	状态码0代表成功
+    statusCode	int	状态码1代表成功,其他代表失败
     data.num_found	String	返回的记录数
 
     companyName String 公司名称
@@ -106,13 +143,14 @@ async def search_companies(province=None, city=None, district=None, company_stat
         area = Area(province=province, city=city, district=district)
         company_status = CompanyStatus(status=company_status).status
         params = {'province': area.province, 'city': area.city, 'district': area.district, 'company_status': company_status, 'company_type': '有限责任公司,股份有限公司,股份合作公司,国有企业,央企,集体所有制,全民所有制,独资企业,有限合伙,普通合伙,外商投资企业,港、澳、台商投资企业,联营企业,私营企业'}
-        return await SearchApiAdapter().invoke(params)
+        adapter = create_search_api_adapter()
+        return await adapter.invoke(params)
     except Exception as e:
         logger.error(e)
-        return f"查询统计企业失败！{e}"
+        return create_bad_resonse(f"查询统计企业失败！{e}")
 
 @mcp.tool()
-async def search_selfemployed(province=None, city=None, district=None, company_status=None):
+async def search_selfemployed(province=None, city=None, district=None, company_status=None) -> dict:
     """
     输入省份、城市、企业状态查询并统计个体户
     回答问题时结果中请先说明查询到的记录数，并以列表的形式列出查询到的前10条个体户
@@ -123,7 +161,7 @@ async def search_selfemployed(province=None, city=None, district=None, company_s
                                  企业状态正常，包括了在营、存续、在业、迁入、迁出的企业
                                  企业状态异常，包括了吊销、注销企业
     :return
-    status	String	状态码0代表成功
+    statusCode	int	状态码1代表成功,其他代表失败
     data.num_found	String	返回的记录数
 
     companyName String 公司名称
@@ -137,13 +175,15 @@ async def search_selfemployed(province=None, city=None, district=None, company_s
         area = Area(province=province, city=city, district=district)
         company_status = CompanyStatus(status=company_status).status
         params = {'province': area.province, 'city': area.city, 'district': area.district, 'company_status': company_status, 'company_type': '个体工商户'}
-        return await SearchApiAdapter().invoke(params)
+        adapter = create_search_api_adapter()
+        return await adapter.invoke(params)
     except Exception as e:
         logger.error(e)
-        return f"查询统计个体户失败!{e}"
+        return create_bad_resonse(f"查询统计个体户失败!{e}")
 
 @mcp.tool()
-async def get_company_info(company_name: str):
+@normalize_company('company_name')
+async def get_company_info(company_name: str) -> dict:
     """
     根据公司名查询公司的基础信息（也称营业执照照面信息），包括统一信用码、企业注册码、企业类型、法定代表人、成立时间、注册资本、企业地址、营业期限、经营范围、登记机关、登记状态、核准时间
     :param company_name: 公司名称
@@ -163,15 +203,18 @@ async def get_company_info(company_name: str):
         EstablishDate	String	成立时间
         CreditNo	String	企业信用代码
     """
+
     try:
-        return await ApiAdapter('https://api.shuidi.cn/utn/ic/Base/V1').invoke({'keyword': company_name})
+        adapter = create_api_adapter('http://api.shuidi.cn/utn/ic/Base/V1')
+        return await adapter.invoke({'keyword': company_name})
     except Exception as e:
         logger.error(e)
-        return f"获取企业[{company_name}]基础信息失败!{e}"
+        return create_bad_resonse(f"获取企业[{company_name}]基础信息失败!{e}")
 
 
 @mcp.tool()
-async def get_company_partner(company_name:str):
+@normalize_company('company_name')
+async def get_company_partner(company_name:str) -> dict:
     """
     根据企业名称获取企业的股东信息
     :param company_name: 企业名称
@@ -191,13 +234,15 @@ async def get_company_partner(company_name:str):
         holderNum String 持股数
     """
     try:
-        return await ApiAdapter('https://api.shuidi.cn/utn/ic/Partners/V2').invoke({'keyword': company_name})
+        adapter = create_api_adapter('https://api.shuidi.cn/utn/ic/Partners/V2')
+        return await adapter.invoke({'keyword': company_name})
     except Exception as e:
         logger.error(e)
-        return f"获取企业[{company_name}]股东信息失败!{e}"
+        return create_bad_resonse(f"获取企业[{company_name}]股东信息失败!{e}")
 
 @mcp.tool()
-async def get_stie_score(company_name:str):
+@normalize_company('company_name')
+async def get_stie_score(company_name:str) -> dict:
     """
     评估企业科创能力，给出科创能力评分及等级
     :param company_name: 公司名称
@@ -244,14 +289,16 @@ async def get_stie_score(company_name:str):
     """
 
     try:
-        return await ApiAdapter('https://api.shuidi.cn/utn/stie/score').invoke({'keyword': company_name})
+        adapter = create_api_adapter('https://api.shuidi.cn/utn/stie/score')
+        return await adapter.invoke({'keyword': company_name})
     except Exception as e:
         logger.error(e)
-        return f"评估企业[{company_name}]科创能力失败！{e}"
+        return create_bad_resonse(f"评估企业[{company_name}]科创能力失败！{e}")
 
 
 @mcp.tool()
-async def search_company_risk(company_name:str):
+@normalize_company('company_name')
+async def search_company_risk(company_name:str) -> dict:
     """
     根据公司名称查询公司的相关风险信息，包括企业自身风险、周边风险、预警信息等
     :param company_name: 公司名称
@@ -273,13 +320,15 @@ async def search_company_risk(company_name:str):
         company_events 中包含 cid 企业id, company_name 企业名称, company_event_count 该企业发生次数, tip 与查询企业的关系（1 表示股东，2 表示对外投资，3 表示分支机构, 空值表示当前查询企业）
     """
     try:
-        return await ApiAdapter('https://api.shuidi.cn/utn/risk/CompanyRiskInfo').invoke({'keyword': company_name})
+        adapter = create_api_adapter('https://api.shuidi.cn/utn/risk/CompanyRiskInfo')
+        return await adapter.invoke({'keyword': company_name})
     except Exception as e:
         logger.error(e)
-        return f"获取企业[{company_name}]风险信息失败!{e}"
+        return create_bad_resonse(f"获取企业[{company_name}]风险信息失败!{e}")
 
 @mcp.tool()
-async def get_company_honor(company_name:str):
+@normalize_company('company_name')
+async def get_company_honor(company_name:str) -> dict:
     """
     根据公司名称获取该公司的荣誉资质
     :param company_name: 公司名称
@@ -294,14 +343,16 @@ async def get_company_honor(company_name:str):
         EndDate String 截止日期
     """
     try:
-        return await ApiAdapter('https://api.shuidi.cn/utn/cf/Honor').invoke({'keyword': company_name})
+        adapter = create_api_adapter('https://api.shuidi.cn/utn/cf/Honor')
+        return await adapter.invoke({'keyword': company_name})
     except Exception as e:
         logger.error(e)
-        return  f"获取企业[{company_name}]荣誉资质信息失败!{e}"
+        return  create_bad_resonse(f"获取企业[{company_name}]荣誉资质信息失败!{e}")
 
 
 @mcp.tool()
-async def get_company_contact(company_name:str):
+@normalize_company('company_name')
+async def get_company_contact(company_name:str) -> dict:
     """
     根据公司名称获取该公司的联系方式，包括电话、邮箱、网站等
     :param company_name: 公司名称
@@ -317,15 +368,17 @@ async def get_company_contact(company_name:str):
         Icp String 网站备案号
     """
     try:
-        return await ApiAdapter('https://api.shuidi.cn/utn/ic/GetContacts').invoke({'keyword': company_name})
+        adapter = create_api_adapter('https://api.shuidi.cn/utn/ic/GetContacts')
+        return await adapter.invoke({'keyword': company_name})
     except Exception as e:
         logger.error(e)
-        return f"获取企业[{company_name}]联系方式失败!{e}"
+        return create_bad_resonse(f"获取企业[{company_name}]联系方式失败!{e}")
 
 
 @mcp.tool()
-async def get_company_investment(company_name:str):
-    """
+@normalize_company('company_name')
+async def get_company_investment(company_name:str) -> dict:
+    '''
     根据企业名称获取该企业对外投资信息
     :param company_name: 企业名称
     :return:
@@ -339,16 +392,18 @@ async def get_company_investment(company_name:str):
         CreditCode  String 社会统一信用代码
         EconKind String 企业类型
         FundedRatio String 出资比例
-    """
+    '''
     try:
-        return await ApiAdapter('https://api.shuidi.cn/utn/ic/Invest/V3').invoke({'keyword': company_name})
+        adapter = create_api_adapter('https://api.shuidi.cn/utn/ic/Invest/V3')
+        return await adapter.invoke({'keyword': company_name})
     except Exception as e:
         logger.error(e)
-        return f"获取企业[{company_name}]对外投资信息失败!{e}"
+        return create_bad_resonse(f"获取企业[{company_name}]对外投资信息失败!{e}")
 
 
 @mcp.tool()
-async def get_company_cert(company_name:str):
+@normalize_company('company_name')
+async def get_company_cert(company_name:str) -> dict:
     """
     根据企业名称获取该企业的资质证书
     :param company_name: 企业名称
@@ -364,13 +419,15 @@ async def get_company_cert(company_name:str):
         status  String  证书状态
     """
     try:
-        return await ApiAdapter('https://api.shuidi.cn/utn/ip/CertificateList/V2').invoke({'keyword': company_name})
+        adapter = create_api_adapter('https://api.shuidi.cn/utn/ip/CertificateList/V2')
+        return await adapter.invoke({'keyword': company_name})
     except Exception as e:
         logger.error(e)
-        return f"获取企业[{company_name}]资质证书失败!{e}"
+        return create_bad_resonse(f"获取企业[{company_name}]资质证书失败!{e}")
 
 @mcp.tool()
-async def get_person_related_company(company_name:str, person_name:str):
+@normalize_company('company_name')
+async def get_person_related_company(company_name:str, person_name:str) -> dict:
     """
     通过公司名称和人名获取企业人员的所有相关公司，包括其担任法人、股东、董监高的公司信息
     :param company_name: 公司名称
@@ -379,7 +436,7 @@ async def get_person_related_company(company_name:str, person_name:str):
     total Number 总数
     isAll Number 是否已全部返回。1全部返回，0已返回前1000个企业
     items List  任职相关信息，每条信息包括：
-        establishTime Number 开业时间
+        estiblishTime Number 开业时间
         regStatus String 经营状态
         type String 类型，包括法人、股东、执行董事、高管等
         regCapital String 注册资本
@@ -387,14 +444,16 @@ async def get_person_related_company(company_name:str, person_name:str):
         creditNo    String 统一信用代码
     """
     try:
-        return await ApiAdapter('https://api.shuidi.cn/utn/cp/AllCompanys').invoke({'name': company_name, 'humanName':person_name})
+        adapter = create_api_adapter('https://api.shuidi.cn/utn/cp/AllCompanys')
+        return await adapter.invoke({'name': company_name, 'humanName':person_name})
     except Exception as e:
         logger.error(e)
-        return f"获取[{company_name}:{person_name}]的关联公司信息失败!{e}"
+        return create_bad_resonse(f"获取[{company_name}:{person_name}]的关联公司信息失败!{e}")
 
 
 @mcp.tool()
-async def get_company_controller(company_name:str):
+@normalize_company('company_name')
+async def get_company_controller(company_name:str) -> dict:
     """
     根据企业名称获取该企业的实控人信息,并显示控制路径
     :param company_name: 企业名称
@@ -416,13 +475,15 @@ async def get_company_controller(company_name:str):
             StartNode String 起始节点id
     """
     try:
-        return await ApiAdapter('https://api.shuidi.cn/utn/pic/ActualController').invoke({'keyword': company_name})
+        adapter = create_api_adapter('https://api.shuidi.cn/utn/pic/ActualController')
+        return await adapter.invoke({'keyword': company_name})
     except Exception as e:
         logger.error(e)
-        return f"获取企业[{company_name}]的实控人信息失败!{e}"
+        return create_bad_resonse(f"获取企业[{company_name}]的实控人信息失败!{e}")
 
 @mcp.tool()
-async def get_company_benificalowner(company_name:str):
+@normalize_company('company_name')
+async def get_company_benificalowner(company_name:str) -> dict:
     """
     根据企业名称查询该企业的受益所有人信息
     :param company_name: 企业名称
@@ -446,14 +507,38 @@ async def get_company_benificalowner(company_name:str):
             Proportion String 持股比例
     """
     try:
-        return await ApiAdapter('https://api.shuidi.cn/utn/pic/BeneficialOwner').invoke({'keyword': company_name})
+        adapter = create_api_adapter('https://api.shuidi.cn/utn/pic/BeneficialOwner')
+        return await adapter.invoke({'keyword': company_name})
     except Exception as e:
         logger.error(e)
-        return f"获取企业[{company_name}]受益所有人信息失败!{e}"
+        return create_bad_resonse(f"获取企业[{company_name}]受益所有人信息失败!{e}")
+
+
+def init_logger():
+    # 移除默认handler
+    logger.remove()
+
+    # 日志格式
+    log_format = (
+        "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
+        "<level>{level: <8}</level> | "
+        "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
+        "<level>{message}</level>"
+    )
+
+    # 添加标准输出
+    logger.add(sys.stdout, format=log_format, level="INFO", enqueue=True)
+    # 设置异常处理
+    logger.add(sys.stderr, format=log_format, level="ERROR", enqueue=True)
 
 
 def main():
+    init_logger()
     mcp.run(transport='stdio')
+
+def test():
+    info = asyncio.run(get_company_info(company_name='凭安征信'))
+    print(info)
 
 
 if __name__ == '__main__':
