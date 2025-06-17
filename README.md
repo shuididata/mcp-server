@@ -1,7 +1,8 @@
 # 企业查询MCP
 一站式解锁企业大数据全维度洞察！精准查询市场主体数据、工商照面详情，深挖股东与对外投资脉络，精准定位疑似实控人及受益所有人。一键扫描企业风险，量化科创实力，荣誉资质、资质证书尽在掌握，还能依企业或人名秒寻关联企业信息，为企业决策、合作把关，赋能商业每一步.
 
-企业查询MCP,分SSE版和STDIO版
+企业查询MCP,分Streamable-http版、SSE版和STDIO版
+- Streamable-http版：部署于云端 https://data.shuidi.cn/mcp
 - SSE版：部署于云端 https://mcp.shuidi.cn/sse
 - STDIO版：部署于本地, 该版本无query_company_data功能
  
@@ -98,13 +99,23 @@ cursor
 
 ## 安装部署
 [请在此处提供详细的安装和部署说明，根据您的产品特性选择合适的描述方式。]
+### Streamable-http版安装部署
+- 在cursor setting中打开"Tools & Integrations"窗口(cursor v1.*以上版本支持)
+- 单击 "New MCP Server"按钮，编辑mcp.json
+- 在cursor中配置
+```json
+ "DataMcpServer":{
+   "url": "https://data.shuidi.cn/mcp"  
+ },
+```
+
 ### SSE版安装部署
 - 在cursor setting中打开MCP窗口
 - 单击 "Add new global MCP Server"按钮，编辑mcp.json
 - 在cursor中配置
 ```json
  "DataMcpServer":{
-   "url": "http://mcp.shuidi.cn/sse"  
+   "url": "https://mcp.shuidi.cn/sse"  
  },
 ```
 ### STDIO版安装部署
