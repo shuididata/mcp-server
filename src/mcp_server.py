@@ -2,6 +2,8 @@ import asyncio
 import inspect
 import sys
 from functools import wraps
+from typing import Optional
+
 from loguru import logger
 from mcp.server import FastMCP
 
@@ -117,14 +119,14 @@ async def search_established_selfemployed(province=None, city=None, district=Non
         return create_bad_resonse("查询统计个体户失败！{e}")
 
 @mcp.tool()
-async def search_companies(province=None, city=None, district=None, company_status=None) -> dict:
+async def search_companies(province:Optional[str]=None, city:Optional[str]=None, district:Optional[str]=None, company_status:Optional[str]=None) -> dict:
     """
     输入省份、城市、企业状态查询并统计企业
     回答问题时结果中请先说明查询到的记录数，并以列表的形式列出查询到的前10条企业
     :param province String 省份,例如上海,新疆,江苏,为None时表示查询全国的企业
     :param city String 城市,地级市，例如杭州，苏州
     :param district String 区县,区县名称需完整,包含市、县、区,例如昆山市，浦东新区
-    :param company_status String 企业状态可以设为"正常"、"异常"、"在营"、"存续"、"在业"、"吊销"、"注销"、"迁入"、"迁出"、"撤销"、"清算"、"停业"、"其他"
+    :param company_status String 企业状态可以设为"正常"、"异常"、"在营"、"存续"、"在业"、"吊销"、"注销"、"迁入"、"迁出"、"撤销"、"清算"、"停业"、"其他",为None时表示所有状态的企业
                                  企业状态正常，包括了在营、存续、在业、迁入、迁出的企业
                                  企业状态异常，包括了吊销、注销企业
     :return
@@ -141,8 +143,16 @@ async def search_companies(province=None, city=None, district=None, company_stat
 
     try:
         area = Area(province=province, city=city, district=district)
-        company_status = CompanyStatus(status=company_status).status
-        params = {'province': area.province, 'city': area.city, 'district': area.district, 'company_status': company_status, 'company_type': '有限责任公司,股份有限公司,股份合作公司,国有企业,央企,集体所有制,全民所有制,独资企业,有限合伙,普通合伙,外商投资企业,港、澳、台商投资企业,联营企业,私营企业'}
+        if company_status:
+            company_status = CompanyStatus(status=company_status).status
+            params = {'province': area.province, 'city': area.city, 'district': area.district,
+                      'company_status': company_status,
+                      'company_type': '有限责任公司,股份有限公司,独资企业,集体所有制,有限合伙,普通合伙,股份合作公司,全民所有制,联营企业,私营企业,其他'}
+
+        else:
+            params = {'province': area.province, 'city': area.city, 'district': area.district,
+                      'company_type': '有限责任公司,股份有限公司,独资企业,集体所有制,有限合伙,普通合伙,股份合作公司,全民所有制,联营企业,私营企业,其他'}
+
         adapter = create_search_api_adapter()
         return await adapter.invoke(params)
     except Exception as e:
@@ -150,14 +160,14 @@ async def search_companies(province=None, city=None, district=None, company_stat
         return create_bad_resonse(f"查询统计企业失败！{e}")
 
 @mcp.tool()
-async def search_selfemployed(province=None, city=None, district=None, company_status=None) -> dict:
+async def search_selfemployed(province:Optional[str]=None, city:Optional[str]=None, district:Optional[str]=None, company_status:Optional[str]=None) -> dict:
     """
     输入省份、城市、企业状态查询并统计个体户
     回答问题时结果中请先说明查询到的记录数，并以列表的形式列出查询到的前10条个体户
     :param province String 省份,例如上海,新疆,江苏,为None时表示查询全国的企业
     :param city String 城市,地级市，例如杭州，苏州
     :param district String 区县,区县名称需完整,包含市、县、区,例如昆山市，浦东新区
-    :param company_status String 企业状态可以设为"正常"、"异常"、"在营"、"存续"、"在业"、"吊销"、"注销"、"迁入"、"迁出"、"撤销"、"清算"、"停业"、"其他"
+    :param company_status String 企业状态可以设为"正常"、"异常"、"在营"、"存续"、"在业"、"吊销"、"注销"、"迁入"、"迁出"、"撤销"、"清算"、"停业"、"其他",为None时表示所有状态的企业
                                  企业状态正常，包括了在营、存续、在业、迁入、迁出的企业
                                  企业状态异常，包括了吊销、注销企业
     :return
@@ -173,8 +183,16 @@ async def search_selfemployed(province=None, city=None, district=None, company_s
     """
     try:
         area = Area(province=province, city=city, district=district)
-        company_status = CompanyStatus(status=company_status).status
-        params = {'province': area.province, 'city': area.city, 'district': area.district, 'company_status': company_status, 'company_type': '个体工商户'}
+        if company_status:
+            company_status = CompanyStatus(status=company_status).status
+            params = {'province': area.province, 'city': area.city, 'district': area.district,
+                      'company_status': company_status,
+                      'company_type': '个体工商户'}
+
+        else:
+            params = {'province': area.province, 'city': area.city, 'district': area.district,
+                      'company_type': '个体工商户'}
+
         adapter = create_search_api_adapter()
         return await adapter.invoke(params)
     except Exception as e:
@@ -535,11 +553,6 @@ def init_logger():
 def main():
     init_logger()
     mcp.run(transport='stdio')
-
-def test():
-    info = asyncio.run(get_company_info(company_name='凭安征信'))
-    print(info)
-
 
 if __name__ == '__main__':
     main()
